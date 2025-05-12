@@ -19,6 +19,8 @@ import {
   Badge,
   Dropdown,
   Menu,
+  Tooltip,
+  Progress,
 } from 'antd';
 import {
   DashboardOutlined,
@@ -35,15 +37,23 @@ import {
   DeleteOutlined,
   SwapOutlined,
   HistoryOutlined,
+  CheckCircleOutlined,
+  InfoCircleOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
+import { Area } from '@ant-design/plots';
+import moment from 'moment';
 import { 
   getITassets, 
   getFurnitureassets, 
   getRealEstateassets, 
   getToolassets, 
   getVehicleassets,
-  updateAsset,
-  deleteAsset,
+  updateITassets,
+  updateFurnitureassets,
+  updateRealEstateassets,
+  updateToolassets,
+  updateVehicleassets,
 } from '../../apipurchase';
 
 const { Header, Content } = Layout;
@@ -56,14 +66,17 @@ const statusColors = {
   'Reserved': 'processing'
 };
 
+const formatCurrency = (value) => 
+  new Intl.NumberFormat('fr-TN', { style: 'currency', currency: 'TND' }).format(value);
+
 const Dashboard = () => {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('table');
-  const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('IT MATERIALS');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState(null);
+  const [searchText, setSearchText] = useState('');
+  const [viewMode, setViewMode] = useState('table');
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -105,20 +118,53 @@ const Dashboard = () => {
     const activeAssets = assets.filter(asset => asset.status === 'Active').length;
     const totalValue = assets.reduce((sum, asset) => sum + (parseFloat(asset.initialValue) || 0), 0);
     const maintenanceCount = assets.filter(asset => asset.status === 'Maintenance').length;
+    const depreciationValue = assets.reduce((sum, asset) => {
+      const initialValue = parseFloat(asset.initialValue) || 0;
+      const age = moment().diff(moment(asset.acquisitionDate), 'years');
+      const depreciation = initialValue * (age * 0.1); // 10% per year
+      return sum + Math.max(0, initialValue - depreciation);
+    }, 0);
 
-    return { totalAssets, activeAssets, totalValue, maintenanceCount };
+    return { totalAssets, activeAssets, totalValue, maintenanceCount, depreciationValue };
   };
 
   const handleEdit = (asset) => {
     setSelectedAsset(asset);
-    form.setFieldsValue(asset);
+    form.setFieldsValue({
+      ...asset,
+      assignedDate: asset.assignedDate ? moment(asset.assignedDate) : null,
+    });
     setEditModalVisible(true);
   };
 
   const handleEditSubmit = async () => {
     try {
       const values = await form.validateFields();
-      await updateAsset(selectedAsset.id, { ...selectedAsset, ...values });
+      let updateFn;
+      switch (selectedCategory) {
+        case 'IT MATERIALS':
+          updateFn = updateITassets;
+          break;
+        case 'FURNITURE':
+          updateFn = updateFurnitureassets;
+          break;
+        case 'VEHICLES':
+          updateFn = updateVehicleassets;
+          break;
+        case 'REAL ESTATE':
+          updateFn = updateRealEstateassets;
+          break;
+        case 'TOOLS':
+          updateFn = updateToolassets;
+          break;
+      }
+      
+      await updateFn(selectedAsset.id, {
+        ...selectedAsset,
+        ...values,
+        lastUpdateTimestamp: new Date().toISOString(),
+      });
+      
       message.success('Asset updated successfully');
       setEditModalVisible(false);
       fetchAssets();
@@ -151,21 +197,53 @@ const Dashboard = () => {
       ),
     },
     {
+      title: 'Assigned To',
+      dataIndex: 'assignedTo',
+      key: 'assignedTo',
+      render: (text, record) => (
+        <Space>
+          {text || 'Unassigned'}
+          {record.assignedDate && (
+            <Tooltip title={`Assigned on ${moment(record.assignedDate).format('LL')}`}>
+              <InfoCircleOutlined />
+            </Tooltip>
+          )}
+        </Space>
+      ),
+    },
+    {
       title: 'Location',
       dataIndex: 'building',
       key: 'building',
+      render: (text, record) => (
+        <Space>
+          {text}
+          <Tag color="blue">{record.room || 'N/A'}</Tag>
+        </Space>
+      ),
     },
     {
-      title: 'Purchase Date',
-      dataIndex: 'acquisitionDate',
-      key: 'acquisitionDate',
-      sorter: (a, b) => new Date(a.acquisitionDate) - new Date(b.acquisitionDate),
-    },
-    {
-      title: 'Initial Value',
-      dataIndex: 'initialValue',
-      key: 'initialValue',
-      render: (value) => new Intl.NumberFormat('fr-TN', { style: 'currency', currency: 'TND' }).format(value),
+      title: 'Value',
+      key: 'value',
+      render: (_, record) => {
+        const initialValue = parseFloat(record.initialValue) || 0;
+        const age = moment().diff(moment(record.acquisitionDate), 'years');
+        const depreciation = initialValue * (age * 0.1); // 10% per year
+        const currentValue = Math.max(0, initialValue - depreciation);
+        
+        return (
+          <Tooltip title={`Initial: ${formatCurrency(initialValue)}`}>
+            <Space direction="vertical" size="small">
+              <span>{formatCurrency(currentValue)}</span>
+              <Progress 
+                percent={Math.round((currentValue / initialValue) * 100)}
+                size="small"
+                status={currentValue < initialValue * 0.2 ? 'exception' : 'normal'}
+              />
+            </Space>
+          </Tooltip>
+        );
+      },
     },
     {
       title: 'Actions',
@@ -179,13 +257,13 @@ const Dashboard = () => {
           />
           <Button 
             type="text" 
-            icon={<HistoryOutlined />} 
-            onClick={() => showMaintenanceHistory(record)}
+            icon={<SwapOutlined />} 
+            onClick={() => handleTransfer(record)}
           />
           <Button 
             type="text" 
-            icon={<SwapOutlined />} 
-            onClick={() => handleTransfer(record)}
+            icon={<HistoryOutlined />} 
+            onClick={() => showHistory(record)}
           />
         </Space>
       ),
@@ -194,12 +272,43 @@ const Dashboard = () => {
 
   const stats = calculateStatistics();
 
+  const renderValueTrendChart = () => {
+    const data = assets.map(asset => {
+      const initialValue = parseFloat(asset.initialValue) || 0;
+      const age = moment().diff(moment(asset.acquisitionDate), 'years');
+      const depreciation = initialValue * (age * 0.1);
+      return {
+        date: asset.acquisitionDate,
+        value: initialValue - depreciation,
+        type: 'Current Value',
+      };
+    });
+
+    return (
+      <Card title="Asset Value Trend">
+        <Area
+          data={data}
+          xField="date"
+          yField="value"
+          seriesField="type"
+          smooth
+          animation={{
+            appear: {
+              animation: 'wave-in',
+              duration: 1000,
+            },
+          }}
+        />
+      </Card>
+    );
+  };
+
   return (
     <Layout className="site-layout">
       <Header className="site-layout-header">
         <Row justify="space-between" align="middle">
           <Col>
-            <h1 className="header-title">Asset Management</h1>
+            <h1 className="header-title">Asset Management Dashboard</h1>
           </Col>
           <Col>
             <Space>
@@ -240,7 +349,7 @@ const Dashboard = () => {
                 title="Total Value"
                 value={stats.totalValue}
                 prefix="TND"
-                precision={2}
+                precision={3}
               />
             </Card>
           </Col>
@@ -249,12 +358,14 @@ const Dashboard = () => {
               <Statistic
                 title="In Maintenance"
                 value={stats.maintenanceCount}
-                prefix={<ToolOutlined />}
+                prefix={<WarningOutlined />}
                 valueStyle={{ color: '#faad14' }}
               />
             </Card>
           </Col>
         </Row>
+
+        {renderValueTrendChart()}
 
         <Card style={{ marginTop: 16 }}>
           <Tabs 
@@ -279,52 +390,89 @@ const Dashboard = () => {
           <Table
             columns={columns}
             dataSource={assets.filter(asset => 
-              asset.assetTag.toLowerCase().includes(searchText.toLowerCase()) ||
-              asset.name.toLowerCase().includes(searchText.toLowerCase())
+              asset.assetTag?.toLowerCase().includes(searchText.toLowerCase()) ||
+              asset.name?.toLowerCase().includes(searchText.toLowerCase())
             )}
             loading={loading}
             rowKey="id"
           />
         </Card>
-      </Content>
 
-      <Modal
-        title="Edit Asset"
-        visible={editModalVisible}
-        onOk={handleEditSubmit}
-        onCancel={() => setEditModalVisible(false)}
-      >
-        <Form
-          form={form}
-          layout="vertical"
+        <Modal
+          title="Edit Asset"
+          visible={editModalVisible}
+          onOk={handleEditSubmit}
+          onCancel={() => setEditModalVisible(false)}
+          width={700}
         >
-          <Form.Item
-            name="status"
-            label="Status"
-            rules={[{ required: true }]}
+          <Form
+            form={form}
+            layout="vertical"
           >
-            <Select>
-              <Select.Option value="Active">Active</Select.Option>
-              <Select.Option value="Maintenance">Maintenance</Select.Option>
-              <Select.Option value="Retired">Retired</Select.Option>
-              <Select.Option value="Reserved">Reserved</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item
-            name="building"
-            label="Location"
-            rules={[{ required: true }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="description"
-            label="Description"
-          >
-            <Input.TextArea />
-          </Form.Item>
-        </Form>
-      </Modal>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="status"
+                  label="Status"
+                  rules={[{ required: true }]}
+                >
+                  <Select>
+                    <Select.Option value="Active">Active</Select.Option>
+                    <Select.Option value="Maintenance">Maintenance</Select.Option>
+                    <Select.Option value="Retired">Retired</Select.Option>
+                    <Select.Option value="Reserved">Reserved</Select.Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="assignedTo"
+                  label="Assigned To"
+                >
+                  <Input />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="building"
+                  label="Building"
+                  rules={[{ required: true }]}
+                >
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="room"
+                  label="Room"
+                >
+                  <Input />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item
+              name="condition"
+              label="Current Condition"
+              rules={[{ required: true }]}
+            >
+              <Select>
+                <Select.Option value="Excellent">Excellent</Select.Option>
+                <Select.Option value="Good">Good</Select.Option>
+                <Select.Option value="Fair">Fair</Select.Option>
+                <Select.Option value="Poor">Poor</Select.Option>
+              </Select>
+            </Form.Item>
+            <Form.Item
+              name="notes"
+              label="Notes"
+            >
+              <Input.TextArea rows={4} />
+            </Form.Item>
+          </Form>
+        </Modal>
+      </Content>
 
       <style jsx>{`
         .site-layout {
