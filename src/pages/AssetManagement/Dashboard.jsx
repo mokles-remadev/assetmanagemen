@@ -21,6 +21,7 @@ import {
   Menu,
   Tooltip,
   Progress,
+  Timeline,
 } from 'antd';
 import {
   DashboardOutlined,
@@ -40,6 +41,8 @@ import {
   CheckCircleOutlined,
   InfoCircleOutlined,
   WarningOutlined,
+  UserOutlined,
+  EnvironmentOutlined,
 } from '@ant-design/icons';
 import { Area } from '@ant-design/plots';
 import moment from 'moment';
@@ -54,6 +57,8 @@ import {
   updateRealEstateassets,
   updateToolassets,
   updateVehicleassets,
+  getAssetHistory,
+  transferAsset,
 } from '../../apipurchase';
 
 const { Header, Content } = Layout;
@@ -77,6 +82,10 @@ const Dashboard = () => {
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [searchText, setSearchText] = useState('');
   const [viewMode, setViewMode] = useState('table');
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [transferModalVisible, setTransferModalVisible] = useState(false);
+  const [assetHistory, setAssetHistory] = useState([]);
+  const [transferForm] = Form.useForm();
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -126,6 +135,41 @@ const Dashboard = () => {
     }, 0);
 
     return { totalAssets, activeAssets, totalValue, maintenanceCount, depreciationValue };
+  };
+
+  const showHistory = async (asset) => {
+    try {
+      setLoading(true);
+      const history = await getAssetHistory(asset.id, selectedCategory);
+      setAssetHistory(history);
+      setSelectedAsset(asset);
+      setHistoryModalVisible(true);
+    } catch (error) {
+      message.error('Failed to fetch asset history');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTransfer = (asset) => {
+    setSelectedAsset(asset);
+    setTransferModalVisible(true);
+    transferForm.resetFields();
+  };
+
+  const handleTransferSubmit = async () => {
+    try {
+      const values = await transferForm.validateFields();
+      await transferAsset(selectedAsset.id, selectedCategory, {
+        ...values,
+        transferDate: values.transferDate.format('YYYY-MM-DD'),
+      });
+      message.success('Asset transferred successfully');
+      setTransferModalVisible(false);
+      fetchAssets();
+    } catch (error) {
+      message.error('Failed to transfer asset');
+    }
   };
 
   const handleEdit = (asset) => {
@@ -472,28 +516,99 @@ const Dashboard = () => {
             </Form.Item>
           </Form>
         </Modal>
-      </Content>
 
-      <style jsx>{`
-        .site-layout {
-          min-height: 100vh;
-        }
-        .site-layout-header {
-          background: #fff;
-          padding: 0 24px;
-          box-shadow: 0 1px 4px rgba(0,21,41,.08);
-        }
-        .header-title {
-          margin: 0;
-          color: #1890ff;
-          font-size: 20px;
-        }
-        .site-layout-content {
-          margin: 24px 16px;
-          padding: 24px;
-          background: #fff;
-        }
-      `}</style>
+        <Modal
+          title="Asset History"
+          visible={historyModalVisible}
+          onCancel={() => setHistoryModalVisible(false)}
+          footer={null}
+          width={600}
+        >
+          <Timeline>
+            {assetHistory.map((event, index) => (
+              <Timeline.Item key={index} color={event.type === 'transfer' ? 'blue' : 'green'}>
+                <p><strong>{event.type}</strong> - {moment(event.date).format('LLL')}</p>
+                <p>{event.description}</p>
+                {event.type === 'transfer' && (
+                  <p>
+                    <EnvironmentOutlined /> From: {event.fromLocation} → To: {event.toLocation}
+                    <br />
+                    <UserOutlined /> By: {event.by}
+                  </p>
+                )}
+              </Timeline.Item>
+            ))}
+          </Timeline>
+        </Modal>
+
+        <Modal
+          title="Transfer Asset"
+          visible={transferModalVisible}
+          onOk={handleTransferSubmit}
+          onCancel={() => setTransferModalVisible(false)}
+          width={500}
+        >
+          <Form
+            form={transferForm}
+            layout="vertical"
+          >
+            <Form.Item
+              name="newDepartment"
+              label="New Department"
+              rules={[{ required: true, message: 'Please select new department' }]}
+            >
+              <Select>
+                <Select.Option value="IT">IT Department</Select.Option>
+                <Select.Option value="HR">HR Department</Select.Option>
+                <Select.Option value="Finance">Finance Department</Select.Option>
+                <Select.Option value="Operations">Operations</Select.Option>
+              </Select>
+            </Form.Item>
+            <Form.Item
+              name="newLocation"
+              label="New Location"
+              rules={[{ required: true, message: 'Please enter new location' }]}
+            >
+              <Input placeholder="Building and Room Number" />
+            </Form.Item>
+            <Form.Item
+              name="transferDate"
+              label="Transfer Date"
+              rules={[{ required: true, message: 'Please select transfer date' }]}
+            >
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item
+              name="reason"
+              label="Transfer Reason"
+              rules={[{ required: true, message: 'Please provide transfer reason' }]}
+            >
+              <Input.TextArea rows={4} />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        <style jsx>{`
+          .site-layout {
+            min-height: 100vh;
+          }
+          .site-layout-header {
+            background: #fff;
+            padding: 0 24px;
+            box-shadow: 0 1px 4px rgba(0,21,41,.08);
+          }
+          .header-title {
+            margin: 0;
+            color: #1890ff;
+            font-size: 20px;
+          }
+          .site-layout-content {
+            margin: 24px 16px;
+            padding: 24px;
+            background: #fff;
+          }
+        `}</style>
+      </Content>
     </Layout>
   );
 };
