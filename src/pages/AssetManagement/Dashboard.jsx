@@ -1,16 +1,12 @@
-```jsx
 import React, { useState, useEffect } from 'react';
 import {
   Layout,
   Button,
   Space,
   Tabs,
-  Modal,
-  Form,
-  DatePicker,
-  Input,
-  Select,
-  message,
+  Row,
+  Col,
+  Card,
 } from 'antd';
 import {
   PlusOutlined,
@@ -28,13 +24,6 @@ import {
   getRealEstateassets, 
   getToolassets, 
   getVehicleassets,
-  updateITassets,
-  updateFurnitureassets,
-  updateRealEstateassets,
-  updateToolassets,
-  updateVehicleassets,
-  getAssetHistory,
-  transferAsset,
 } from '../../apipurchase';
 import DashboardStats from './components/DashboardStats';
 import AssetList from './components/AssetList';
@@ -51,20 +40,59 @@ const assetCategories = {
 };
 
 const defaultAssetFields = {
-  // ... (your existing defaultAssetFields object)
+  IT: [
+    { key: "manufacturer", label: "Manufacturer", type: "input" },
+    { key: "model", label: "Model", type: "input" },
+    { key: "serialNumber", label: "Serial Number", type: "input" },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "warrantyExpiry", label: "Warranty Expiry", type: "date" },
+    { key: "warrantyDocumentLink", label: "Warranty Document Link", type: "input" },
+  ],
+  FURNITURE: [
+    { key: "manufacturer", label: "Manufacturer", type: "input" },
+    { key: "model", label: "Model", type: "input" },
+    { key: "serialNumber", label: "Serial Number", type: "input" },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "warrantyExpiry", label: "Warranty Expiry", type: "date" },
+    { key: "warrantyDocumentLink", label: "Warranty Document Link", type: "input" },
+  ],
+  VEHICLES: [
+    { key: "manufacturer", label: "Manufacturer", type: "input" },
+    { key: "model", label: "Model", type: "input" },
+    { key: "modelYear", label: "Model Year", type: "input" },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "vin", label: "VIN Number", type: "input" },
+    { key: "chasisNumber", label: "Chasis Number", type: "input" },
+    { key: "engineType", label: "Engine Type", type: "select", options: ["petrol", "diesel", "electric", "hybrid"] },
+    { key: "engineNumber", label: "Engine Number", type: "input" },
+    { key: "plateNumber", label: "Plate Number", type: "input" },
+    { key: "odometerReading", label: "Odometer Reading", type: "input" },
+    { key: "registrationDate", label: "Registration Date", type: "date" },
+    { key: "warrantyExpiry", label: "Warranty Expiry", type: "date" },
+    { key: "warrantyDetails", label: "Warranty Details", type: "textarea" },
+    { key: "warrantyDocumentLink", label: "Warranty Document Link", type: "input" },
+    { key: "pictureLink", label: "Picture Link", type: "input" },
+  ],
+  REAL_ESTATE: [
+    { key: "location", label: "Address Location", type: "input" },
+    { key: "propertyType", label: "Property Type", type: "select", options: ["office", "warehouse", "land", "apartment", "other"] },
+    { key: "propertySize", label: "Property Size", type: "input" },
+    { key: "description", label: "Description", type: "textarea" },
+  ],
+  TOOLS: [
+    { key: "manufacturer", label: "Manufacturer", type: "input" },
+    { key: "model", label: "Model", type: "input" },
+    { key: "serialNumber", label: "Serial Number", type: "input" },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "warrantyExpiry", label: "Warranty Expiry", type: "date" },
+    { key: "warrantyDocumentLink", label: "Warranty Document Link", type: "input" },
+  ],
 };
 
 const Dashboard = () => {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('IT MATERIALS');
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState(null);
-  const [historyModalVisible, setHistoryModalVisible] = useState(false);
-  const [transferModalVisible, setTransferModalVisible] = useState(false);
-  const [assetHistory, setAssetHistory] = useState([]);
-  const [transferForm] = Form.useForm();
-  const [form] = Form.useForm();
 
   useEffect(() => {
     fetchAssets();
@@ -114,11 +142,9 @@ const Dashboard = () => {
     const statusCount = {};
 
     assets.forEach(asset => {
-      // Category distribution
       const category = asset.description || 'Uncategorized';
       categoryCount[category] = (categoryCount[category] || 0) + 1;
 
-      // Status distribution
       const status = asset.status || 'Unknown';
       statusCount[status] = (statusCount[status] || 0) + 1;
     });
@@ -134,32 +160,6 @@ const Dashboard = () => {
     }));
 
     return { assetsByCategory, assetsByStatus };
-  };
-
-  const handleEdit = (asset) => {
-    setSelectedAsset(asset);
-    form.setFieldsValue(asset);
-    setEditModalVisible(true);
-  };
-
-  const handleTransfer = (asset) => {
-    setSelectedAsset(asset);
-    setTransferModalVisible(true);
-    transferForm.resetFields();
-  };
-
-  const showHistory = async (asset) => {
-    try {
-      setLoading(true);
-      const history = await getAssetHistory(asset.id, selectedCategory);
-      setAssetHistory(history);
-      setSelectedAsset(asset);
-      setHistoryModalVisible(true);
-    } catch (error) {
-      message.error('Failed to fetch asset history');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const { assetsByCategory, assetsByStatus } = calculateAssetDistribution();
@@ -206,15 +206,10 @@ const Dashboard = () => {
             assets={assets}
             loading={loading}
             selectedCategory={selectedCategory}
-            onEdit={handleEdit}
-            onTransfer={handleTransfer}
-            onHistory={showHistory}
             assetCategories={assetCategories}
             defaultAssetFields={defaultAssetFields}
           />
         </Card>
-
-        {/* Your existing modals remain here */}
       </Content>
 
       <style jsx>{`
@@ -242,4 +237,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-```
