@@ -12,6 +12,7 @@ import {
   Form,
   DatePicker,
   Timeline,
+  message,
 } from 'antd';
 import {
   EditOutlined,
@@ -22,6 +23,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import moment from 'moment';
+import { updateAsset, transferAsset, getAssetHistory } from '../../../apipurchase';
 
 const { Option } = Select;
 
@@ -37,17 +39,21 @@ const AssetList = ({
   assets,
   loading,
   selectedCategory,
-  onEdit,
-  onTransfer,
-  onHistory,
   assetCategories,
   defaultAssetFields,
+  onAssetUpdate,
 }) => {
   const [searchText, setSearchText] = useState('');
   const [selectedSubCategory, setSelectedSubCategory] = useState(null);
   const [filterManufacturer, setFilterManufacturer] = useState(null);
   const [filterModel, setFilterModel] = useState(null);
   const [filterSupplier, setFilterSupplier] = useState(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [transferModalVisible, setTransferModalVisible] = useState(false);
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [assetHistory, setAssetHistory] = useState([]);
+  const [form] = Form.useForm();
 
   const getUniqueValues = (field) => {
     return [...new Set(assets.map(asset => asset[field]))].filter(Boolean);
@@ -59,6 +65,54 @@ const AssetList = ({
 
   const formatCurrency = (value) => 
     new Intl.NumberFormat('fr-TN', { style: 'currency', currency: 'TND' }).format(value);
+
+  const handleEdit = async (asset) => {
+    setSelectedAsset(asset);
+    form.setFieldsValue(asset);
+    setEditModalVisible(true);
+  };
+
+  const handleEditSubmit = async () => {
+    try {
+      const values = await form.validateFields();
+      await updateAsset(selectedAsset.id, {
+        ...values,
+        type: selectedCategory,
+      });
+      message.success('Asset updated successfully');
+      setEditModalVisible(false);
+      onAssetUpdate?.();
+    } catch (error) {
+      message.error('Failed to update asset');
+    }
+  };
+
+  const handleTransfer = async (asset) => {
+    setSelectedAsset(asset);
+    setTransferModalVisible(true);
+  };
+
+  const handleTransferSubmit = async (values) => {
+    try {
+      await transferAsset(selectedAsset.id, selectedCategory, values);
+      message.success('Asset transferred successfully');
+      setTransferModalVisible(false);
+      onAssetUpdate?.();
+    } catch (error) {
+      message.error('Failed to transfer asset');
+    }
+  };
+
+  const handleHistory = async (asset) => {
+    try {
+      const history = await getAssetHistory(asset.id, selectedCategory);
+      setAssetHistory(history);
+      setSelectedAsset(asset);
+      setHistoryModalVisible(true);
+    } catch (error) {
+      message.error('Failed to fetch asset history');
+    }
+  };
 
   const filteredAssets = assets.filter(asset => {
     return (!selectedSubCategory || asset.description === selectedSubCategory) &&
@@ -204,17 +258,17 @@ const AssetList = ({
             <Button 
               type="text" 
               icon={<EditOutlined />} 
-              onClick={() => onEdit?.(record)}
+              onClick={() => handleEdit(record)}
             />
             <Button 
               type="text" 
               icon={<SwapOutlined />} 
-              onClick={() => onTransfer?.(record)}
+              onClick={() => handleTransfer(record)}
             />
             <Button 
               type="text" 
               icon={<HistoryOutlined />} 
-              onClick={() => onHistory?.(record)}
+              onClick={() => handleHistory(record)}
             />
           </Space>
         ),
@@ -249,6 +303,96 @@ const AssetList = ({
         rowKey="id"
         scroll={{ x: true }}
       />
+
+      <Modal
+        title="Edit Asset"
+        visible={editModalVisible}
+        onOk={handleEditSubmit}
+        onCancel={() => setEditModalVisible(false)}
+      >
+        <Form form={form} layout="vertical">
+          {defaultAssetFields[selectedCategory.replace(' ', '_')]?.map(field => (
+            <Form.Item
+              key={field.key}
+              name={field.key}
+              label={field.label}
+              rules={[{ required: true, message: `Please enter ${field.label}` }]}
+            >
+              {field.type === 'input' && <Input />}
+              {field.type === 'textarea' && <Input.TextArea />}
+              {field.type === 'date' && <DatePicker style={{ width: '100%' }} />}
+              {field.type === 'select' && (
+                <Select>
+                  {field.options?.map(opt => (
+                    <Option key={opt} value={opt}>{opt}</Option>
+                  ))}
+                </Select>
+              )}
+            </Form.Item>
+          ))}
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Transfer Asset"
+        visible={transferModalVisible}
+        onOk={() => form.submit()}
+        onCancel={() => setTransferModalVisible(false)}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleTransferSubmit}
+        >
+          <Form.Item
+            name="newLocation"
+            label="New Location"
+            rules={[{ required: true }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="newDepartment"
+            label="New Department"
+            rules={[{ required: true }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="transferDate"
+            label="Transfer Date"
+            rules={[{ required: true }]}
+          >
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="notes"
+            label="Transfer Notes"
+          >
+            <Input.TextArea />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`Asset History - ${selectedAsset?.assetTag}`}
+        visible={historyModalVisible}
+        onCancel={() => setHistoryModalVisible(false)}
+        footer={null}
+        width={700}
+      >
+        <Timeline>
+          {assetHistory.map((event, index) => (
+            <Timeline.Item key={index}>
+              <p><strong>{moment(event.date).format('YYYY-MM-DD HH:mm')}</strong></p>
+              <p>{event.description}</p>
+              {event.user && (
+                <p><UserOutlined /> {event.user}</p>
+              )}
+            </Timeline.Item>
+          ))}
+        </Timeline>
+      </Modal>
     </>
   );
 };
