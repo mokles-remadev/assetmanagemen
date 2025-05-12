@@ -22,6 +22,7 @@ import {
   Tooltip,
   Progress,
   Timeline,
+  Cascader,
 } from 'antd';
 import {
   DashboardOutlined,
@@ -44,7 +45,7 @@ import {
   UserOutlined,
   EnvironmentOutlined,
 } from '@ant-design/icons';
-import { Area } from '@ant-design/plots';
+import { Area, Pie } from '@ant-design/plots';
 import moment from 'moment';
 import { 
   getITassets, 
@@ -63,12 +64,71 @@ import {
 
 const { Header, Content } = Layout;
 const { TabPane } = Tabs;
+const { Option } = Select;
 
 const statusColors = {
   'Active': 'success',
   'Maintenance': 'warning',
   'Retired': 'error',
   'Reserved': 'processing'
+};
+
+const defaultAssetFields = {
+  IT: [
+    { key: "manufacturer", label: "Manufacturer", type: "input" },
+    { key: "model", label: "Model", type: "input" },
+    { key: "serialNumber", label: "Serial Number", type: "input" },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "warrantyExpiry", label: "Warranty Expiry", type: "date" },
+    { key: "warrantyDocumentLink", label: "Warranty Document Link", type: "input" },
+  ],
+  FURNITURE: [
+    { key: "manufacturer", label: "Manufacturer", type: "input" },
+    { key: "model", label: "Model", type: "input" },
+    { key: "serialNumber", label: "Serial Number", type: "input" },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "warrantyExpiry", label: "Warranty Expiry", type: "date" },
+    { key: "warrantyDocumentLink", label: "Warranty Document Link", type: "input" },
+  ],
+  VEHICLES: [
+    { key: "manufacturer", label: "Manufacturer", type: "input" },
+    { key: "model", label: "Model", type: "input" },
+    { key: "modelYear", label: "Model Year", type: "input" },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "vin", label: "VIN Number", type: "input" },
+    { key: "chasisNumber", label: "Chasis Number", type: "input" },
+    { key: "engineType", label: "Engine Type", type: "select", options: ["petrol", "diesel", "electric", "hybrid"] },
+    { key: "engineNumber", label: "Engine Number", type: "input" },
+    { key: "plateNumber", label: "Plate Number", type: "input" },
+    { key: "odometerReading", label: "Odometer Reading", type: "input" },
+    { key: "registrationDate", label: "Registration Date", type: "date" },
+    { key: "warrantyExpiry", label: "Warranty Expiry", type: "date" },
+    { key: "warrantyDetails", label: "Warranty Details", type: "textarea" },
+    { key: "warrantyDocumentLink", label: "Warranty Document Link", type: "input" },
+    { key: "pictureLink", label: "Picture Link", type: "input" },
+  ],
+  REAL_ESTATE: [
+    { key: "location", label: "Address Location", type: "input" },
+    { key: "propertyType", label: "Property Type", type: "select", options: ["office", "warehouse", "land", "apartment", "other"] },
+    { key: "propertySize", label: "Property Size", type: "input" },
+    { key: "description", label: "Description", type: "textarea" },
+  ],
+  TOOLS: [
+    { key: "manufacturer", label: "Manufacturer", type: "input" },
+    { key: "model", label: "Model", type: "input" },
+    { key: "serialNumber", label: "Serial Number", type: "input" },
+    { key: "description", label: "Description", type: "textarea" },
+    { key: "warrantyExpiry", label: "Warranty Expiry", type: "date" },
+    { key: "warrantyDocumentLink", label: "Warranty Document Link", type: "input" },
+  ],
+};
+
+const assetCategories = {
+  'IT MATERIALS': ['Laptops', 'Desktops', 'Monitors', 'Printers', 'Hard Drives', 'Networking Equipment'],
+  'FURNITURE': ['Desks', 'Chairs', 'Cabinets', 'Tables', 'Sofas', 'Shelves'],
+  'VEHICLES': ['Cars', 'Trucks', 'Vans', 'Motorcycles', 'Special Vehicles'],
+  'REAL ESTATE': ['Offices', 'Warehouses', 'Land', 'Apartments', 'Retail Spaces'],
+  'TOOLS': ['Power Tools', 'Hand Tools', 'Measuring Equipment', 'Safety Equipment'],
 };
 
 const formatCurrency = (value) => 
@@ -78,6 +138,7 @@ const Dashboard = () => {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('IT MATERIALS');
+  const [selectedSubCategory, setSelectedSubCategory] = useState(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [searchText, setSearchText] = useState('');
@@ -87,6 +148,9 @@ const Dashboard = () => {
   const [assetHistory, setAssetHistory] = useState([]);
   const [transferForm] = Form.useForm();
   const [form] = Form.useForm();
+  const [filterManufacturer, setFilterManufacturer] = useState(null);
+  const [filterModel, setFilterModel] = useState(null);
+  const [filterSupplier, setFilterSupplier] = useState(null);
 
   useEffect(() => {
     fetchAssets();
@@ -217,104 +281,237 @@ const Dashboard = () => {
     }
   };
 
-  const columns = [
-    {
-      title: 'Asset Tag',
-      dataIndex: 'assetTag',
-      key: 'assetTag',
-      sorter: (a, b) => a.assetTag.localeCompare(b.assetTag),
-    },
-    {
-      title: 'Name',
-      dataIndex: 'name',
-      key: 'name',
-      sorter: (a, b) => a.name.localeCompare(b.name),
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status) => (
-        <Tag color={statusColors[status] || 'default'}>
-          {status}
-        </Tag>
-      ),
-    },
-    {
-      title: 'Assigned To',
-      dataIndex: 'assignedTo',
-      key: 'assignedTo',
-      render: (text, record) => (
-        <Space>
-          {text || 'Unassigned'}
-          {record.assignedDate && (
-            <Tooltip title={`Assigned on ${moment(record.assignedDate).format('LL')}`}>
-              <InfoCircleOutlined />
-            </Tooltip>
-          )}
-        </Space>
-      ),
-    },
-    {
-      title: 'Location',
-      dataIndex: 'building',
-      key: 'building',
-      render: (text, record) => (
-        <Space>
-          {text}
-          <Tag color="blue">{record.room || 'N/A'}</Tag>
-        </Space>
-      ),
-    },
-    {
-      title: 'Value',
-      key: 'value',
-      render: (_, record) => {
-        const initialValue = parseFloat(record.initialValue) || 0;
-        const age = moment().diff(moment(record.acquisitionDate), 'years');
-        const depreciation = initialValue * (age * 0.1); // 10% per year
-        const currentValue = Math.max(0, initialValue - depreciation);
-        
-        return (
-          <Tooltip title={`Initial: ${formatCurrency(initialValue)}`}>
-            <Space direction="vertical" size="small">
-              <span>{formatCurrency(currentValue)}</span>
-              <Progress 
-                percent={Math.round((currentValue / initialValue) * 100)}
-                size="small"
-                status={currentValue < initialValue * 0.2 ? 'exception' : 'normal'}
-              />
-            </Space>
-          </Tooltip>
-        );
-      },
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_, record) => (
-        <Space>
-          <Button 
-            type="text" 
-            icon={<EditOutlined />} 
-            onClick={() => handleEdit(record)}
-          />
-          <Button 
-            type="text" 
-            icon={<SwapOutlined />} 
-            onClick={() => handleTransfer(record)}
-          />
-          <Button 
-            type="text" 
-            icon={<HistoryOutlined />} 
-            onClick={() => showHistory(record)}
-          />
-        </Space>
-      ),
-    },
-  ];
+  const getUniqueValues = (field) => {
+    return [...new Set(assets.map(asset => asset[field]))].filter(Boolean);
+  };
 
-  const stats = calculateStatistics();
+  const manufacturers = getUniqueValues('manufacturer');
+  const models = getUniqueValues('model');
+  const suppliers = getUniqueValues('supplierName');
+
+  const filteredAssets = assets.filter(asset => {
+    return (!selectedSubCategory || asset.description === selectedSubCategory) &&
+           (!filterManufacturer || asset.manufacturer === filterManufacturer) &&
+           (!filterModel || asset.model === filterModel) &&
+           (!filterSupplier || asset.supplierName === filterSupplier) &&
+           (searchText ? 
+             asset.assetTag?.toLowerCase().includes(searchText.toLowerCase()) ||
+             asset.name?.toLowerCase().includes(searchText.toLowerCase())
+             : true
+           );
+  });
+
+  const renderFilters = () => (
+    <Space style={{ marginBottom: 16 }}>
+      <Select
+        allowClear
+        placeholder="Category"
+        style={{ width: 200 }}
+        value={selectedSubCategory}
+        onChange={setSelectedSubCategory}
+      >
+        {assetCategories[selectedCategory]?.map(cat => (
+          <Option key={cat} value={cat}>{cat}</Option>
+        ))}
+      </Select>
+      <Select
+        allowClear
+        placeholder="Manufacturer"
+        style={{ width: 200 }}
+        value={filterManufacturer}
+        onChange={setFilterManufacturer}
+      >
+        {manufacturers.map(m => (
+          <Option key={m} value={m}>{m}</Option>
+        ))}
+      </Select>
+      <Select
+        allowClear
+        placeholder="Model"
+        style={{ width: 200 }}
+        value={filterModel}
+        onChange={setFilterModel}
+      >
+        {models.map(m => (
+          <Option key={m} value={m}>{m}</Option>
+        ))}
+      </Select>
+      <Select
+        allowClear
+        placeholder="Supplier"
+        style={{ width: 200 }}
+        value={filterSupplier}
+        onChange={setFilterSupplier}
+      >
+        {suppliers.map(s => (
+          <Option key={s} value={s}>{s}</Option>
+        ))}
+      </Select>
+      <Input.Search
+        placeholder="Search assets..."
+        style={{ width: 200 }}
+        value={searchText}
+        onChange={(e) => setSearchText(e.target.value)}
+      />
+    </Space>
+  );
+
+  const getColumns = () => {
+    const baseColumns = [
+      {
+        title: 'Asset Tag',
+        dataIndex: 'assetTag',
+        key: 'assetTag',
+        sorter: (a, b) => a.assetTag.localeCompare(b.assetTag),
+      },
+      {
+        title: 'Category',
+        dataIndex: 'description',
+        key: 'description',
+        render: (text) => <Tag color="blue">{text}</Tag>,
+      },
+      {
+        title: 'Manufacturer',
+        dataIndex: 'manufacturer',
+        key: 'manufacturer',
+      },
+      {
+        title: 'Model',
+        dataIndex: 'model',
+        key: 'model',
+      },
+      {
+        title: 'Status',
+        dataIndex: 'status',
+        key: 'status',
+        render: (status) => (
+          <Tag color={statusColors[status] || 'default'}>
+            {status}
+          </Tag>
+        ),
+      },
+      {
+        title: 'Assigned To',
+        dataIndex: 'assignedTo',
+        key: 'assignedTo',
+        render: (text, record) => (
+          <Space>
+            {text || 'Unassigned'}
+            {record.assignedDate && (
+              <Tooltip title={`Assigned on ${moment(record.assignedDate).format('LL')}`}>
+                <InfoCircleOutlined />
+              </Tooltip>
+            )}
+          </Space>
+        ),
+      },
+      {
+        title: 'Location',
+        dataIndex: 'building',
+        key: 'building',
+        render: (text, record) => (
+          <Space>
+            {text}
+            <Tag color="blue">{record.room || 'N/A'}</Tag>
+          </Space>
+        ),
+      },
+      {
+        title: 'Value',
+        key: 'value',
+        render: (_, record) => {
+          const initialValue = parseFloat(record.initialValue) || 0;
+          const age = moment().diff(moment(record.acquisitionDate), 'years');
+          const depreciation = initialValue * (age * 0.1);
+          const currentValue = Math.max(0, initialValue - depreciation);
+          
+          return (
+            <Tooltip title={`Initial: ${formatCurrency(initialValue)}`}>
+              <Space direction="vertical" size="small">
+                <span>{formatCurrency(currentValue)}</span>
+                <Progress 
+                  percent={Math.round((currentValue / initialValue) * 100)}
+                  size="small"
+                  status={currentValue < initialValue * 0.2 ? 'exception' : 'normal'}
+                />
+              </Space>
+            </Tooltip>
+          );
+        },
+      },
+      {
+        title: 'Actions',
+        key: 'actions',
+        render: (_, record) => (
+          <Space>
+            <Button 
+              type="text" 
+              icon={<EditOutlined />} 
+              onClick={() => handleEdit(record)}
+            />
+            <Button 
+              type="text" 
+              icon={<SwapOutlined />} 
+              onClick={() => handleTransfer(record)}
+            />
+            <Button 
+              type="text" 
+              icon={<HistoryOutlined />} 
+              onClick={() => showHistory(record)}
+            />
+          </Space>
+        ),
+      },
+    ];
+
+    const categoryFields = defaultAssetFields[selectedCategory.replace(' ', '_')] || [];
+    const specificColumns = categoryFields
+      .filter(field => !['manufacturer', 'model'].includes(field.key))
+      .map(field => ({
+        title: field.label,
+        dataIndex: field.key,
+        key: field.key,
+        render: (text, record) => {
+          if (field.type === 'date') {
+            return text ? moment(text).format('YYYY-MM-DD') : '-';
+          }
+          return text || '-';
+        },
+      }));
+
+    return [...baseColumns, ...specificColumns];
+  };
+
+  const renderEditForm = () => {
+    const categoryFields = defaultAssetFields[selectedCategory.replace(' ', '_')] || [];
+    
+    return (
+      <Form
+        form={form}
+        layout="vertical"
+      >
+        {categoryFields.map(field => (
+          <Form.Item
+            key={field.key}
+            name={field.key}
+            label={field.label}
+            rules={[{ required: true, message: `Please enter ${field.label}` }]}
+          >
+            {field.type === 'input' && <Input />}
+            {field.type === 'textarea' && <Input.TextArea rows={4} />}
+            {field.type === 'date' && <DatePicker style={{ width: '100%' }} />}
+            {field.type === 'select' && (
+              <Select>
+                {field.options?.map(opt => (
+                  <Option key={opt} value={opt}>{opt}</Option>
+                ))}
+              </Select>
+            )}
+          </Form.Item>
+        ))}
+      </Form>
+    );
+  };
 
   const renderValueTrendChart = () => {
     const data = assets.map(asset => {
@@ -372,7 +569,7 @@ const Dashboard = () => {
             <Card>
               <Statistic
                 title="Total Assets"
-                value={stats.totalAssets}
+                value={calculateStatistics().totalAssets}
                 prefix={<DashboardOutlined />}
               />
             </Card>
@@ -381,7 +578,7 @@ const Dashboard = () => {
             <Card>
               <Statistic
                 title="Active Assets"
-                value={stats.activeAssets}
+                value={calculateStatistics().activeAssets}
                 prefix={<CheckCircleOutlined />}
                 valueStyle={{ color: '#3f8600' }}
               />
@@ -391,7 +588,7 @@ const Dashboard = () => {
             <Card>
               <Statistic
                 title="Total Value"
-                value={stats.totalValue}
+                value={calculateStatistics().totalValue}
                 prefix="TND"
                 precision={3}
               />
@@ -401,7 +598,7 @@ const Dashboard = () => {
             <Card>
               <Statistic
                 title="In Maintenance"
-                value={stats.maintenanceCount}
+                value={calculateStatistics().maintenanceCount}
                 prefix={<WarningOutlined />}
                 valueStyle={{ color: '#faad14' }}
               />
@@ -423,20 +620,11 @@ const Dashboard = () => {
             <TabPane tab={<><ToolOutlined /> TOOLS</>} key="TOOLS" />
           </Tabs>
 
-          <div style={{ marginBottom: 16 }}>
-            <Input.Search
-              placeholder="Search assets..."
-              onChange={(e) => setSearchText(e.target.value)}
-              style={{ width: 300 }}
-            />
-          </div>
+          {renderFilters()}
 
           <Table
-            columns={columns}
-            dataSource={assets.filter(asset => 
-              asset.assetTag?.toLowerCase().includes(searchText.toLowerCase()) ||
-              asset.name?.toLowerCase().includes(searchText.toLowerCase())
-            )}
+            columns={getColumns()}
+            dataSource={filteredAssets}
             loading={loading}
             rowKey="id"
           />
@@ -449,72 +637,7 @@ const Dashboard = () => {
           onCancel={() => setEditModalVisible(false)}
           width={700}
         >
-          <Form
-            form={form}
-            layout="vertical"
-          >
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  name="status"
-                  label="Status"
-                  rules={[{ required: true }]}
-                >
-                  <Select>
-                    <Select.Option value="Active">Active</Select.Option>
-                    <Select.Option value="Maintenance">Maintenance</Select.Option>
-                    <Select.Option value="Retired">Retired</Select.Option>
-                    <Select.Option value="Reserved">Reserved</Select.Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="assignedTo"
-                  label="Assigned To"
-                >
-                  <Input />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  name="building"
-                  label="Building"
-                  rules={[{ required: true }]}
-                >
-                  <Input />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="room"
-                  label="Room"
-                >
-                  <Input />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Form.Item
-              name="condition"
-              label="Current Condition"
-              rules={[{ required: true }]}
-            >
-              <Select>
-                <Select.Option value="Excellent">Excellent</Select.Option>
-                <Select.Option value="Good">Good</Select.Option>
-                <Select.Option value="Fair">Fair</Select.Option>
-                <Select.Option value="Poor">Poor</Select.Option>
-              </Select>
-            </Form.Item>
-            <Form.Item
-              name="notes"
-              label="Notes"
-            >
-              <Input.TextArea rows={4} />
-            </Form.Item>
-          </Form>
+          {renderEditForm()}
         </Modal>
 
         <Modal
