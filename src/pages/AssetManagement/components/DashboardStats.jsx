@@ -1,23 +1,22 @@
-```jsx
 import React from 'react';
 import { Row, Col, Card, Statistic } from 'antd';
 import { 
   DashboardOutlined, 
   CheckCircleOutlined, 
-  WarningOutlined 
+  WarningOutlined,
+  DollarOutlined,
 } from '@ant-design/icons';
 import { Pie } from '@ant-design/plots';
 
 const DashboardStats = ({ stats, assetsByCategory, assetsByStatus }) => {
   const pieConfig = {
     appendPadding: 10,
-    data: assetsByCategory,
     angleField: 'value',
     colorField: 'type',
     radius: 0.8,
     label: {
       type: 'outer',
-      content: '{name}: {percentage}',
+      content: '{name} {percentage}',
     },
     interactions: [
       {
@@ -26,10 +25,8 @@ const DashboardStats = ({ stats, assetsByCategory, assetsByStatus }) => {
     ],
   };
 
-  const statusPieConfig = {
-    ...pieConfig,
-    data: assetsByStatus,
-  };
+  const formatCurrency = (value) => 
+    new Intl.NumberFormat('fr-TN', { style: 'currency', currency: 'TND' }).format(value);
 
   return (
     <>
@@ -58,8 +55,8 @@ const DashboardStats = ({ stats, assetsByCategory, assetsByStatus }) => {
             <Statistic
               title="Total Value"
               value={stats.totalValue}
-              prefix="TND"
-              precision={3}
+              prefix={<DollarOutlined />}
+              formatter={value => formatCurrency(value)}
             />
           </Card>
         </Col>
@@ -78,12 +75,12 @@ const DashboardStats = ({ stats, assetsByCategory, assetsByStatus }) => {
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} md={12}>
           <Card title="Assets by Category">
-            <Pie {...pieConfig} />
+            <Pie {...pieConfig} data={assetsByCategory} />
           </Card>
         </Col>
         <Col xs={24} md={12}>
           <Card title="Assets by Status">
-            <Pie {...statusPieConfig} />
+            <Pie {...pieConfig} data={assetsByStatus} />
           </Card>
         </Col>
       </Row>
@@ -92,4 +89,3 @@ const DashboardStats = ({ stats, assetsByCategory, assetsByStatus }) => {
 };
 
 export default DashboardStats;
-```

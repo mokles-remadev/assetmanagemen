@@ -1,4 +1,3 @@
-```jsx
 import React, { useState } from 'react';
 import {
   Table,
@@ -25,6 +24,14 @@ import {
 import moment from 'moment';
 
 const { Option } = Select;
+
+const statusColors = {
+  'Active': 'success',
+  'Maintenance': 'warning',
+  'Retired': 'error',
+  'Reserved': 'processing',
+  'In Stock': 'default'
+};
 
 const AssetList = ({
   assets,
@@ -160,8 +167,9 @@ const AssetList = ({
         key: 'building',
         render: (text, record) => (
           <Space>
+            <EnvironmentOutlined />
             {text}
-            <Tag color="blue">{record.room || 'N/A'}</Tag>
+            {record.room && <Tag color="blue">{record.room}</Tag>}
           </Space>
         ),
       },
@@ -196,17 +204,17 @@ const AssetList = ({
             <Button 
               type="text" 
               icon={<EditOutlined />} 
-              onClick={() => onEdit(record)}
+              onClick={() => onEdit?.(record)}
             />
             <Button 
               type="text" 
               icon={<SwapOutlined />} 
-              onClick={() => onTransfer(record)}
+              onClick={() => onTransfer?.(record)}
             />
             <Button 
               type="text" 
               icon={<HistoryOutlined />} 
-              onClick={() => onHistory(record)}
+              onClick={() => onHistory?.(record)}
             />
           </Space>
         ),
@@ -239,10 +247,10 @@ const AssetList = ({
         dataSource={filteredAssets}
         loading={loading}
         rowKey="id"
+        scroll={{ x: true }}
       />
     </>
   );
 };
 
 export default AssetList;
-```
